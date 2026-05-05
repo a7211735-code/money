@@ -178,10 +178,33 @@
   .modal h3{font-family:var(--display);font-size:1rem;font-weight:600;margin-bottom:0.5rem;}
   .modal p{font-size:0.78rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.7;}
   .modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+  .cust-sum-val.n{color:var(--text);}.cust-sum-val.b{color:var(--blue);}.cust-sum-val.a{color:var(--amber);}.cust-sum-val.r{color:var(--red);}.cust-sum-val{color:var(--accent);}
 
   /* Products tag list in table */
   .prod-tags{display:flex;flex-wrap:wrap;gap:3px;max-width:220px;}
   .prod-tag{display:inline-block;background:var(--surface2);color:var(--muted);padding:1px 7px;border-radius:4px;font-size:0.65rem;white-space:nowrap;}
+
+  /* Customer panel */
+  .cust-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:1.25rem;}
+  .cust-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;cursor:pointer;transition:all 0.2s;}
+  .cust-card:hover{border-color:rgba(255,255,255,0.2);background:#1e1e22;}
+  .cust-card.active{border-color:var(--accent);background:var(--accent-dim);}
+  .cust-name{font-family:var(--display);font-size:1rem;font-weight:600;margin-bottom:4px;}
+  .cust-meta{font-size:0.68rem;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;}
+  .cust-meta span{display:flex;align-items:center;gap:4px;}
+  .cust-stat{color:var(--accent);}
+  .cust-detail{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:1.25rem;}
+  .cust-detail-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  .cust-detail-title{font-family:var(--display);font-size:1.1rem;font-weight:600;}
+  .cust-summary{display:flex;gap:20px;flex-wrap:wrap;padding:0.85rem 1.25rem;border-bottom:1px solid var(--border);background:var(--surface2);}
+  .cust-sum-item{display:flex;flex-direction:column;gap:2px;}
+  .cust-sum-label{font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
+  .cust-sum-val{font-family:var(--display);font-size:1rem;font-weight:600;}
+  .no-cust{padding:3rem;text-align:center;color:var(--muted);font-size:0.78rem;line-height:2.2;}
+  .cust-note-wrap{padding:0.75rem 1.25rem;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;}
+  .cust-note-input{flex:1;background:var(--surface2);border:1px solid transparent;border-radius:7px;color:var(--text);font-family:var(--mono);font-size:0.78rem;padding:7px 10px;outline:none;transition:border-color 0.2s;}
+  .cust-note-input:focus{border-color:var(--accent);}
+  .cust-note-input::placeholder{color:rgba(255,255,255,0.18);}
 
   @media(max-width:700px){
     .form-body.c4{grid-template-columns:1fr 1fr;}
@@ -215,6 +238,7 @@
 <div class="tabs">
   <button class="tab active" onclick="switchTab('sales',this)">銷售紀錄</button>
   <button class="tab" onclick="switchTab('inventory',this)">產品庫存</button>
+  <button class="tab" onclick="switchTab('customers',this)">客戶管理</button>
 </div>
 
 <!-- ══════════ SALES ══════════ -->
@@ -421,6 +445,64 @@
   </div>
 
 </div><!-- /panel-inventory -->
+
+<!-- ═══════════ CUSTOMERS ═══════════ -->
+<div id="panel-customers" class="panel">
+
+  <div class="metrics c3">
+    <div class="metric" data-i="01"><div class="metric-label">客戶總數</div><div class="metric-value n" id="cust-m-count">0</div></div>
+    <div class="metric" data-i="02"><div class="metric-label">總消費金額</div><div class="metric-value b" id="cust-m-rev">$0</div></div>
+    <div class="metric" data-i="03"><div class="metric-label">總貢獻獲利</div><div class="metric-value" id="cust-m-profit">$0</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">搜尋客戶</span>
+    </div>
+    <div style="padding:1rem 1.25rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <input type="text" id="cust-search" placeholder="輸入客人姓名 / 帳號搜尋..."
+        oninput="renderCustomers()"
+        style="flex:1;min-width:200px;background:var(--surface2);border:1px solid transparent;border-radius:7px;color:var(--text);font-family:var(--mono);font-size:0.82rem;padding:9px 12px;outline:none;transition:border-color 0.2s;"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'">
+      <select id="cust-sort" onchange="renderCustomers()"
+        style="background:var(--surface2);border:1px solid transparent;border-radius:7px;color:var(--text);font-family:var(--mono);font-size:0.78rem;padding:9px 12px;outline:none;">
+        <option value="recent">最近購買</option>
+        <option value="profit">獲利最高</option>
+        <option value="orders">訂單最多</option>
+        <option value="name">姓名排序</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Customer cards grid -->
+  <div class="cust-grid" id="cust-grid"></div>
+  <div class="no-cust" id="cust-empty" style="display:none;">找不到符合的客戶</div>
+
+  <!-- Customer detail -->
+  <div class="cust-detail" id="cust-detail" style="display:none;">
+    <div class="cust-detail-header">
+      <div class="cust-detail-title" id="cust-detail-name"></div>
+      <button class="btn-s" onclick="closeCustDetail()" style="font-size:0.72rem;padding:5px 12px;">✕ 關閉</button>
+    </div>
+    <div class="cust-summary" id="cust-summary"></div>
+    <div class="cust-note-wrap">
+      <input class="cust-note-input" type="text" id="cust-note-input" placeholder="新增客戶備註（過敏、偏好、聯絡方式等）...">
+      <button class="btn-p" onclick="saveCustNote()" style="padding:7px 14px;font-size:0.75rem;">儲存備註</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>日期</th><th>產品（數量）</th><th>級別</th><th>通路</th>
+            <th class="r">成本</th><th class="r">售出金額</th><th class="r">獲利</th><th>備註</th>
+          </tr>
+        </thead>
+        <tbody id="cust-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /panel-customers -->
 </div>
 
 <!-- Delete modal -->
@@ -480,6 +562,18 @@ if (!products) {
     id:i+1, name:p.name, sku:'', costs:p.costs, price:0, stock:0, sold:0
   }));
   localStorage.setItem('prd-v3', JSON.stringify(products));
+} else {
+  // Upgrade: ensure every product has all 4 cost levels
+  let changed = false;
+  products = products.map(p => {
+    if (!p.costs || p.costs.length < 4) {
+      const tmpl = PRODUCT_LIST.find(t => t.name === p.name);
+      changed = true;
+      return { ...p, costs: tmpl ? tmpl.costs : [p.costs[0]||0, 0, 0, 0] };
+    }
+    return p;
+  });
+  if (changed) localStorage.setItem('prd-v3', JSON.stringify(products));
 }
 
 // selectedItems: [{productId, qty, cost, price}]
@@ -704,6 +798,7 @@ function addSalesRecord() {
   renderSalesTable(); updateSalesMetrics();
   renderInvTable();   updateInvMetrics();
   renderPicker();
+  renderCustomers();
 }
 
 function clearSalesForm() {
@@ -866,7 +961,7 @@ function askDelete(type,idx){
 }
 function confirmDelete(){
   if(!deleteCtx)return;
-  if(deleteCtx.type==='sales'){salesRecords.splice(deleteCtx.idx,1);save();renderSalesTable();updateSalesMetrics();}
+  if(deleteCtx.type==='sales'){salesRecords.splice(deleteCtx.idx,1);save();renderSalesTable();updateSalesMetrics();renderCustomers();}
   else{products.splice(deleteCtx.idx,1);save();renderInvTable();updateInvMetrics();renderPicker();}
   closeModal();
 }
@@ -972,6 +1067,140 @@ function exportInvCSV() {
   downloadCSV('產品庫存.csv', [header, ...rows]);
 }
 
+// ══ Customers ══
+let customerNotes = JSON.parse(localStorage.getItem('cust-notes') || '{}');
+let activeCustName = null;
+
+function getCustomerList() {
+  const map = {};
+  salesRecords.forEach(r => {
+    const key = r.customer.trim();
+    if (!map[key]) map[key] = { name:key, orders:[], totalRev:0, totalProfit:0, lastDate:'' };
+    map[key].orders.push(r);
+    map[key].totalRev    += (r.totalPrice||0);
+    map[key].totalProfit += r.profit;
+    if (!map[key].lastDate || r.date > map[key].lastDate) map[key].lastDate = r.date;
+  });
+  return Object.values(map);
+}
+
+function renderCustomers() {
+  const q    = document.getElementById('cust-search').value.toLowerCase();
+  const sort = document.getElementById('cust-sort').value;
+  let list   = getCustomerList();
+
+  if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+
+  list.sort((a,b) => {
+    if (sort==='recent')  return b.lastDate.localeCompare(a.lastDate);
+    if (sort==='profit')  return b.totalProfit - a.totalProfit;
+    if (sort==='orders')  return b.orders.length - a.orders.length;
+    if (sort==='name')    return a.name.localeCompare(b.name, 'zh-TW');
+    return 0;
+  });
+
+  const grid  = document.getElementById('cust-grid');
+  const empty = document.getElementById('cust-empty');
+
+  // Metrics
+  const allCusts = getCustomerList();
+  document.getElementById('cust-m-count').textContent  = allCusts.length;
+  document.getElementById('cust-m-rev').textContent    = fmt(allCusts.reduce((s,c)=>s+c.totalRev,0));
+  document.getElementById('cust-m-profit').textContent = fmt(allCusts.reduce((s,c)=>s+c.totalProfit,0));
+
+  if (list.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = list.map(c => {
+    const isActive = activeCustName === c.name;
+    const note = customerNotes[c.name] ? '📝' : '';
+    return `
+      <div class="cust-card${isActive?' active':''}" onclick="openCustDetail('${c.name.replace(/'/g,"\'")}')">
+        <div class="cust-name">${c.name} ${note}</div>
+        <div class="cust-meta">
+          <span>訂單 <span class="cust-stat">${c.orders.length}</span> 筆</span>
+          <span>消費 <span class="cust-stat">${fmt(c.totalRev)}</span></span>
+          <span>獲利 <span class="cust-stat">${fmt(c.totalProfit)}</span></span>
+          <span>最近 <span class="cust-stat">${c.lastDate}</span></span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openCustDetail(name) {
+  activeCustName = name;
+  const orders = salesRecords.filter(r=>r.customer.trim()===name).sort((a,b)=>b.date.localeCompare(a.date));
+  const totalRev    = orders.reduce((s,r)=>s+(r.totalPrice||0),0);
+  const totalCost   = orders.reduce((s,r)=>s+(r.totalCost||0),0);
+  const totalFee    = orders.reduce((s,r)=>s+(r.fee||0),0);
+  const totalProfit = orders.reduce((s,r)=>s+r.profit,0);
+
+  document.getElementById('cust-detail').style.display = 'block';
+  document.getElementById('cust-detail-name').textContent = name;
+
+  // Note
+  const noteEl = document.getElementById('cust-note-input');
+  noteEl.value = customerNotes[name] || '';
+
+  // Summary
+  document.getElementById('cust-summary').innerHTML = `
+    <div class="cust-sum-item"><div class="cust-sum-label">訂單筆數</div><div class="cust-sum-val n">${orders.length}</div></div>
+    <div class="cust-sum-item"><div class="cust-sum-label">總消費金額</div><div class="cust-sum-val b">${fmt(totalRev)}</div></div>
+    <div class="cust-sum-item"><div class="cust-sum-label">總成本</div><div class="cust-sum-val a">${fmt(totalCost)}</div></div>
+    <div class="cust-sum-item"><div class="cust-sum-label">總手續費</div><div class="cust-sum-val r">${fmt(totalFee)}</div></div>
+    <div class="cust-sum-item"><div class="cust-sum-label">總貢獻獲利</div><div class="cust-sum-val ${totalProfit>=0?'':'r'}">${fmt(totalProfit)}</div></div>
+    <div class="cust-sum-item"><div class="cust-sum-label">備註</div><div class="cust-sum-val n" style="font-size:0.78rem;">${customerNotes[name]||'—'}</div></div>
+  `;
+
+  // Table
+  document.getElementById('cust-tbody').innerHTML = orders.map((r,i) => {
+    const tags = (r.items||[]).map(it=>{
+      const p=products.find(x=>x.id===it.productId);
+      return `<span class="prod-tag">${p?p.name:'?'} ×${it.qty}</span>`;
+    }).join('');
+    return `
+      <tr>
+        <td class="m">${orders.length-i}</td>
+        <td class="m">${r.date}</td>
+        <td><div class="prod-tags">${tags||'—'}</div></td>
+        <td><span class="level-badge ${LEVEL_CLASSES[r.level]}">${LEVEL_NAMES[r.level]}</span></td>
+        <td><span class="badge ${CH_CLASS[r.channel]}">${CH_LABEL[r.channel]}</span></td>
+        <td class="r m">${fmt(r.totalCost||0)}</td>
+        <td class="r m">${fmt(r.totalPrice||0)}</td>
+        <td class="r"><span class="${r.profit>=0?'vp':'vn'}">${fmt(r.profit)}</span></td>
+        <td class="m">${r.note||'—'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Scroll to detail
+  setTimeout(()=>document.getElementById('cust-detail').scrollIntoView({behavior:'smooth',block:'start'}), 50);
+
+  // Re-render cards to show active state
+  renderCustomers();
+}
+
+function closeCustDetail() {
+  activeCustName = null;
+  document.getElementById('cust-detail').style.display = 'none';
+  renderCustomers();
+}
+
+function saveCustNote() {
+  if (!activeCustName) return;
+  const note = document.getElementById('cust-note-input').value.trim();
+  if (note) customerNotes[activeCustName] = note;
+  else delete customerNotes[activeCustName];
+  localStorage.setItem('cust-notes', JSON.stringify(customerNotes));
+  openCustDetail(activeCustName);
+  renderCustomers();
+}
+
 // ══ Init ══
 const vm=document.getElementById('view-month');
 vm.value=currentMonth();
@@ -980,6 +1209,7 @@ document.getElementById('table-month-label').textContent=monthDisplay(currentMon
 document.getElementById('f-date').value=todayStr();
 renderPicker(); renderSalesTable(); updateSalesMetrics();
 renderInvTable(); updateInvMetrics();
+renderCustomers();
 </script>
 </body>
 </html>
