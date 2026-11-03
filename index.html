@@ -122,7 +122,23 @@ header{display:flex;align-items:flex-end;justify-content:space-between;
 .panel{display:none;}.panel.active{display:block;}
 
 /* ── Month bar ── */
-.month-bar{display:flex;align-items:center;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap;}
+.month-bar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap;}
+.month-shortcuts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;}
+.month-shortcuts .btn-month{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+  border-radius:6px;padding:4px 10px;font-size:0.68rem;font-family:var(--mono);cursor:pointer;transition:all .15s;}
+.month-shortcuts .btn-month:hover{border-color:var(--accent);color:var(--accent);}
+.month-shortcuts .btn-month.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.month-shortcuts .year-label{font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);align-self:center;margin-right:2px;}
+.ranking-card{margin-top:1rem;}
+.ranking-list{display:flex;flex-direction:column;gap:6px;margin-top:0.75rem;}
+.ranking-row{display:flex;align-items:center;gap:10px;}
+.ranking-rank{font-size:0.7rem;font-family:var(--mono);color:var(--muted);width:20px;text-align:right;flex-shrink:0;}
+.ranking-rank.top{color:var(--accent);font-weight:600;}
+.ranking-name{flex:1;font-size:0.8rem;}
+.ranking-bar-wrap{width:120px;flex-shrink:0;}
+.ranking-bar{height:6px;background:var(--accent-dim);border-radius:3px;}
+.ranking-bar-fill{height:6px;background:var(--accent);border-radius:3px;transition:width .3s;}
+.ranking-qty{font-size:0.72rem;font-family:var(--mono);color:var(--muted);width:50px;text-align:right;flex-shrink:0;}
 .month-bar label{font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
 .month-bar input[type=month]{background:var(--surface2);border:1px solid transparent;
   border-radius:7px;color:var(--text);font-family:var(--mono);font-size:0.8rem;
@@ -387,6 +403,7 @@ tbody td.r{text-align:right;}tbody td.m{color:var(--muted);font-size:0.72rem;}
     <input type="month" id="view-month" onchange="onMonthChange()">
     <span class="month-label" id="month-display"></span>
   </div>
+  <div class="month-shortcuts" id="month-shortcuts"></div>
 
   <div class="metrics c5">
     <div class="metric" data-i="1"><div class="metric-label">本月售出金額</div><div class="metric-value b" id="m-rev">$0</div></div>
@@ -482,6 +499,13 @@ tbody td.r{text-align:right;}tbody td.m{color:var(--muted);font-size:0.72rem;}
         <tbody id="sales-tbody"></tbody>
       </table>
       <div class="empty-state" id="sales-empty" style="display:none;">本月尚無銷售紀錄</div>
+    </div>
+  </div>
+
+  <div class="card ranking-card">
+    <div class="card-header"><span class="card-title">本月熱銷產品排行</span></div>
+    <div class="ranking-list" id="ranking-list">
+      <div class="empty-state" style="display:block;">本月尚無銷售資料</div>
     </div>
   </div>
 </div><!-- /panel-sales -->
@@ -826,12 +850,16 @@ async function initSheets() {
     { range:'產品庫存!A1:J1', values: invHeader },
     { range:'客戶備註!A1:B1', values: notesHeader },
   ]);
-  // Init products from default list if empty
+  // Always sync product list from PRODUCT_LIST (preserves existing stock/sold counts)
   const existing = await readRange('產品庫存!A2:J');
-  if (!existing || existing.length === 0) {
-    const rows = PRODUCT_LIST.map((p,i) => [i+1, p.name, '', p.costs[0], p.costs[1], p.costs[2], p.costs[3], 0, 0, 0]);
-    await appendRows('產品庫存', rows);
-  }
+  const existingMap = {};
+  (existing||[]).forEach(r => { if(r[1]) existingMap[r[1]] = r; });
+  const rows = PRODUCT_LIST.map((p,i) => {
+    const ex = existingMap[p.name];
+    return [i+1, p.name, ex?ex[2]:'', p.costs[0], p.costs[1], p.costs[2], p.costs[3], ex?ex[7]:0, ex?ex[8]:0, ex?ex[9]:0];
+  });
+  await gapi.client.sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: '產品庫存!A2:J' });
+  if(rows.length) await appendRows('產品庫存', rows);
 }
 
 // ════════════════════════════════════════
@@ -894,7 +922,8 @@ async function loadAllData() {
       note: r[10] || '',
     }));
 
-    products = pRows.map(r => ({
+    // Build products from Sheets, then sync with PRODUCT_LIST (add missing, update costs)
+    const sheetProds = pRows.map(r => ({
       id: Number(r[0]),
       name: r[1] || '',
       sku: r[2] || '',
@@ -903,6 +932,27 @@ async function loadAllData() {
       stock: Number(r[8] || 0),
       sold: Number(r[9] || 0),
     }));
+    const sheetProdMap = {};
+    sheetProds.forEach(p => { sheetProdMap[p.name] = p; });
+
+    // Merge: PRODUCT_LIST order first (with updated costs), then any extra products from Sheets
+    const merged = PRODUCT_LIST.map((def, i) => {
+      const ex = sheetProdMap[def.name];
+      return { id: i+1, name: def.name, sku: ex?.sku||'', costs: def.costs, price: ex?.price||0, stock: ex?.stock||0, sold: ex?.sold||0 };
+    });
+    // Append any custom products added by user not in PRODUCT_LIST
+    sheetProds.forEach(p => {
+      if(!PRODUCT_LIST.find(d=>d.name===p.name)) merged.push({...p, id: merged.length+1});
+    });
+    products = merged;
+
+    // If products changed vs Sheets (e.g. new items from PRODUCT_LIST), write back silently
+    const needsSync = PRODUCT_LIST.some(d => !sheetProdMap[d.name]);
+    if(needsSync) {
+      const rows = products.map(p => [p.id, p.name, p.sku, p.costs[0], p.costs[1], p.costs[2], p.costs[3], p.price, p.stock, p.sold]);
+      gapi.client.sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: '產品庫存!A2:J' })
+        .then(() => appendRows('產品庫存', rows));
+    }
 
     customerNotes = {};
     nRows.forEach(r => { if (r[0]) customerNotes[r[0]] = r[1] || ''; });
@@ -1006,7 +1056,7 @@ function initUI() {
 }
 
 function refreshAll() {
-  renderPicker(); renderSalesTable(); updateSalesMetrics();
+  renderPicker(); renderSalesTable(); updateSalesMetrics(); renderRanking(); renderMonthShortcuts();
   renderInvTable(); updateInvMetrics(); renderCustomers();
 }
 
@@ -1021,7 +1071,58 @@ function onMonthChange() {
   const ym = document.getElementById('view-month').value;
   document.getElementById('month-display').textContent = monthDisplay(ym);
   document.getElementById('table-month-label').textContent = monthDisplay(ym);
-  renderSalesTable(); updateSalesMetrics();
+  renderSalesTable(); updateSalesMetrics(); renderRanking(); renderMonthShortcuts();
+}
+
+function renderMonthShortcuts() {
+  const wrap = document.getElementById('month-shortcuts');
+  if(!wrap) return;
+  // Collect all months with data + current month
+  const monthsSet = new Set();
+  monthsSet.add(currentMonth());
+  salesRecords.forEach(r => { if(r.date) monthsSet.add(r.date.slice(0,7)); });
+  const months = [...monthsSet].sort().reverse();
+  // Group by year
+  const byYear = {};
+  months.forEach(ym => { const y=ym.slice(0,4); if(!byYear[y]) byYear[y]=[]; byYear[y].push(ym); });
+  const curYm = document.getElementById('view-month').value;
+  wrap.innerHTML = Object.keys(byYear).sort().reverse().map(y => {
+    const btns = byYear[y].map(ym => {
+      const m = parseInt(ym.slice(5));
+      const active = ym===curYm ? ' active' : '';
+      return `<button class="btn-month${active}" onclick="jumpToMonth('${ym}')">${m}月</button>`;
+    }).join('');
+    return `<span class="year-label">${y}年</span>${btns}`;
+  }).join('');
+}
+
+function jumpToMonth(ym) {
+  document.getElementById('view-month').value = ym;
+  onMonthChange();
+}
+
+function renderRanking() {
+  const ym = getViewMonth();
+  const monthRecs = salesRecords.filter(r => r.date.slice(0,7)===ym);
+  const qtyMap = {};
+  monthRecs.forEach(r => {
+    (r.items||[]).forEach(item => {
+      const p = products.find(x=>x.id===item.productId);
+      const name = p ? p.name : '未知產品';
+      qtyMap[name] = (qtyMap[name]||0) + (item.qty||1);
+    });
+  });
+  const list = document.getElementById('ranking-list');
+  if(!Object.keys(qtyMap).length){ list.innerHTML='<div class="empty-state" style="display:block;">本月尚無銷售資料</div>'; return; }
+  const sorted = Object.entries(qtyMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const max = sorted[0][1];
+  list.innerHTML = sorted.map(([name,qty],i) => `
+    <div class="ranking-row">
+      <span class="ranking-rank${i<3?' top':''}">${i+1}</span>
+      <span class="ranking-name">${name}</span>
+      <div class="ranking-bar-wrap"><div class="ranking-bar"><div class="ranking-bar-fill" style="width:${Math.round(qty/max*100)}%"></div></div></div>
+      <span class="ranking-qty">${qty} 件</span>
+    </div>`).join('');
 }
 
 function onLevelChange() {
