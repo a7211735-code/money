@@ -621,7 +621,7 @@ tbody td.r{text-align:right;}tbody td.m{color:var(--muted);font-size:0.72rem;}
 // ════════════════════════════════════════
 const CLIENT_ID = '532415753482-m73bli0stjikhuvj6nmh89suc1nbv5a9.apps.googleusercontent.com';
 const API_KEY   = 'AIzaSyCG09e2-aBkOxgXAfb2u-7rO9x-MiYAvJw';
-const SCOPES    = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const SCOPES    = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly';
 
 // ════════════════════════════════════════
 // STATE
@@ -747,13 +747,36 @@ function handleAuthClick() {
   tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
+async function findExistingSheet() {
+  // Search Google Drive for a file named 'ADS淨利計算表'
+  try {
+    const res = await fetch(
+      "https://www.googleapis.com/drive/v3/files?q=" +
+      encodeURIComponent("name='ADS淨利計算表' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false") +
+      "&fields=files(id,name)&pageSize=1",
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const data = await res.json();
+    if (data.files && data.files.length > 0) return data.files[0].id;
+  } catch(e) {}
+  return null;
+}
+
 async function afterAuth() {
   setAuthStatus('載入資料中…');
   localStorage.setItem('ads-access-token', accessToken);
   if (!SHEET_ID) {
-    document.getElementById('auth-sheet-setup').style.display = 'flex';
-    setAuthStatus('請設定 Google Sheets 試算表');
-    return;
+    setAuthStatus('搜尋試算表中…');
+    const found = await findExistingSheet();
+    if (found) {
+      SHEET_ID = found;
+      localStorage.setItem('ads-sheet-id', SHEET_ID);
+      setAuthStatus('找到試算表，載入中…');
+    } else {
+      document.getElementById('auth-sheet-setup').style.display = 'flex';
+      setAuthStatus('請設定 Google Sheets 試算表');
+      return;
+    }
   }
   try {
     await loadAllData();
@@ -764,7 +787,16 @@ async function afterAuth() {
       showAuthScreen();
       setAuthStatus('登入已過期，請重新登入');
     } else if (e.status === 404) {
-      setAuthStatus('找不到試算表，請確認 ID 是否正確');
+      // Sheet ID saved but file not found — maybe deleted; search again
+      SHEET_ID = '';
+      localStorage.removeItem('ads-sheet-id');
+      const found = await findExistingSheet();
+      if (found) {
+        SHEET_ID = found;
+        localStorage.setItem('ads-sheet-id', SHEET_ID);
+        try { await loadAllData(); showApp(); return; } catch(e2) {}
+      }
+      setAuthStatus('找不到試算表，請重新建立');
       document.getElementById('auth-sheet-setup').style.display = 'flex';
     } else {
       setAuthStatus('載入失敗: ' + (e.message || e.status));
