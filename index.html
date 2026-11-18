@@ -788,19 +788,8 @@ function handleAuthClick() {
     return;
   }
   setAuthStatus('授權中…');
-  // On mobile Safari/iOS, popups are always blocked — use redirect directly
-  const isMobileSafari = /iP(hone|ad|od)/.test(navigator.userAgent) ||
-    (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') && window.innerWidth < 768);
-  if (isMobileSafari) {
-    doRedirectAuth();
-    return;
-  }
-  try {
-    tokenClient.requestAccessToken({ prompt: '' });
-  } catch(e) {
-    // Popup blocked or not supported — use redirect
-    doRedirectAuth();
-  }
+  // Always use redirect flow — works on all devices including mobile
+  doRedirectAuth();
 }
 
 async function findExistingSheet() {
