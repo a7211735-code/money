@@ -953,7 +953,7 @@ async function initSheets() {
 // ════════════════════════════════════════
 async function readRange(range) {
   const res = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
-  return res.result.values?.slice(1) || []; // skip header
+  return res.result.values || []; // range already starts at row 2, no header to skip
 }
 
 async function batchUpdate(data) {
