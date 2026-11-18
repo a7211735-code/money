@@ -702,8 +702,16 @@ function initGis() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
+    ux_mode: 'popup',
     callback: async (resp) => {
-      if (resp.error) { setAuthStatus('授權失敗: ' + resp.error); return; }
+      if (resp.error) {
+        // If popup blocked, fall back to redirect
+        if (resp.error === 'popup_blocked_by_browser' || resp.error === 'popup_failed_to_open') {
+          doRedirectAuth();
+          return;
+        }
+        setAuthStatus('授權失敗: ' + resp.error); return;
+      }
       accessToken = resp.access_token;
       gapi.client.setToken({ access_token: accessToken });
       await afterAuth();
@@ -713,12 +721,48 @@ function initGis() {
   maybeInit();
 }
 
+function doRedirectAuth() {
+  // Build Google OAuth URL and redirect in same tab
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: window.location.origin + window.location.pathname,
+    response_type: 'token',
+    scope: SCOPES,
+    state: 'oauth_redirect',
+  });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+function checkRedirectToken() {
+  // After redirect, token is in URL hash
+  if (window.location.hash) {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const token = hash.get('access_token');
+    const state = hash.get('state');
+    if (token && state === 'oauth_redirect') {
+      // Clean up URL
+      history.replaceState(null, '', window.location.pathname);
+      return token;
+    }
+  }
+  return null;
+}
+
 function maybeInit() {
   if (!gapiInited || !gisInited) return;
   // If no CLIENT_ID configured, show config error
   if (!CLIENT_ID) {
     setAuthStatus('⚠️ 尚未設定 Google OAuth Client ID，請參閱說明文件');
     document.getElementById('auth-screen').style.display = 'flex';
+    return;
+  }
+  // Check if returning from redirect auth
+  const redirectToken = checkRedirectToken();
+  if (redirectToken) {
+    accessToken = redirectToken;
+    gapi.client.setToken({ access_token: redirectToken });
+    localStorage.setItem('ads-access-token', redirectToken);
+    afterAuth().catch(() => showAuthScreen());
     return;
   }
   // Try silent token refresh
@@ -744,7 +788,12 @@ function handleAuthClick() {
     return;
   }
   setAuthStatus('授權中…');
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  try {
+    tokenClient.requestAccessToken({ prompt: '' });
+  } catch(e) {
+    // Popup blocked or not supported — use redirect
+    doRedirectAuth();
+  }
 }
 
 async function findExistingSheet() {
