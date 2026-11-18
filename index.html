@@ -722,7 +722,6 @@ function initGis() {
 }
 
 function doRedirectAuth() {
-  // Build Google OAuth URL and redirect in same tab
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: window.location.origin + window.location.pathname,
@@ -730,7 +729,14 @@ function doRedirectAuth() {
     scope: SCOPES,
     state: 'oauth_redirect',
   });
-  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+  // Use <a> click for iOS Safari compatibility
+  const a = document.createElement('a');
+  a.href = url;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function checkRedirectToken() {
